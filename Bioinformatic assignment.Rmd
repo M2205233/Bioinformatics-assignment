@@ -1,0 +1,288 @@
+---
+title: "Advanced Bioinformatics 2026 assessment"
+author: "M2205233"
+date: "2026-04-12"
+output: html_document
+---
+
+#General R/Rstudio assessment 
+
+##Task 3.1. 
+ Sum of all integers between 5 and 55
+ The : operator creates a sequence of integers from 5 to 55.
+ sum() then adds up all numbers in that sequence.
+
+
+```{r}
+sum(5:55)
+#expected 1530
+```
+
+##Task 3.2. 
+
+```{r}
+#Function sumfun(n) to sum integers from 5 to n
+sumfun <- function(n) {sum(5:n)}
+
+sumfun(10)      #expected 45
+sumfun(20)      #expected 200
+sumfun(100)     #expected 5040
+```
+
+##Task 3.3 
+First 12 Fibonacci numbers using a for loop
+```{r}
+fib <- numeric(12)        # create numeric vector of length 12
+fib[1] <- 1               # first term
+fib[2] <- 1               # second term
+
+for (i in 3:12) {
+  fib[i] <- fib[i - 1] + fib[i - 2]
+}
+
+print(fib)
+# Expected: 1 1 2 3 5 8 13 21 34 55 89 144
+```
+
+##Task 3.4
+ Boxplot of mpg by gear from mtcars using ggplot2
+
+```{r}
+library(ggplot2)
+
+# Make gear a factor for a categorical x-axis
+
+mtcars$gear <- factor(mtcars$gear)
+
+ggplot(mtcars, aes(x = gear, y = mpg, fill = gear)) +
+  geom_boxplot() +
+  labs(
+    title = "Miles per Gallon by Number of Gears",
+    x = "Number of Gears",
+    y = "Miles per Gallon"
+  )
+```
+
+##Task 3.5
+Linear relationship between speed and stopping distance
+
+```{r}
+data(cars)   # loads the built-in 'cars' dataset
+
+fit <- lm(dist ~ speed, data = cars)
+summary(fit)
+
+#Intercept ≈ −17.58 (SE ≈ 6.76)
+#Slope ≈ 3.93 (SE ≈ 0.42)
+```
+ 
+##Task 3.6
+```{r}
+library(ggplot2)
+
+ggplot(cars, aes(x = speed, y = dist)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "purple") +
+  labs(
+    title = "Stopping Distance vs Speed with Linear Fit",
+    x = "Speed (mph)",
+    y = "Stopping distance (ft)"
+  )
+```
+
+##Task 3.7
+```{r}
+quad_fit <- lm(dist ~ speed + I(speed^2), data = cars)
+
+library(ggplot2)
+
+ggplot(cars, aes(x = speed, y = dist)) +
+  geom_point() +  # observed data
+  stat_smooth(
+    method  = "lm",
+    formula = y ~ x + I(x^2),
+    se      = FALSE,
+    color   = "Purple"
+  ) +
+  labs(
+    title = "Stopping Distance vs Speed with Quadratic Fit",
+    x = "Speed (mph)",
+    y = "Stopping distance (ft)"
+  )
+
+```
+
+#RNA-seq assessment 
+
+##Task3.8
+```{r}
+# Read the count matrix
+all_counts <- read.csv(file = "/Users/aisha/Downloads/LMS_RNAseq_short-master-2023-final-2/course/exercises/data/exercise1_counts.csv", header = T, row.names = 1)
+head(all_counts)
+
+# Read the sample description file
+
+sam_des <- read.table("/Users/aisha/Downloads/LMS_RNAseq_short-master-2023-final-2/course/exercises/data/exercise1_sample_description.info", sep = "\t", header = TRUE)
+head(sam_des)
+
+
+```
+
+##Task 3.9
+
+```{r}
+# Create col data from sample description
+col_data <- data.frame(sample = sam_des$sample, condition = sam_des$condition, batch = sam_des$batch)
+head(col_data)
+
+# Check dimensions
+all(colnames(all_counts) == col_data$name)
+```
+
+##Task 3.10
+```{r,collapse=T,warning=FALSE,eval=TRUE}
+
+library(DESeq2)
+# Create DESeq object
+dds <- DESeqDataSetFromMatrix(countData = all_counts, colData = col_data, design =~ condition)
+dds
+
+```
+
+##Task 3.11
+
+```{r}
+# rlog transformation
+rld <- rlog(dds, blind = TRUE)
+
+
+# VST transformation
+vsd <- varianceStabilizingTransformation(dds, blind = TRUE)
+```
+
+##Task 3.12
+
+```{r}
+
+# Load libraries
+library("pheatmap")
+library(DESeq2)
+
+# Get dds normalized counts
+dds <- DESeq(dds)
+dds_counts <- counts(dds, normalized = TRUE)
+head(dds_counts)
+
+# Select top 40 highly expressed genes
+select <- order(rowMeans(counts(dds, normalized = TRUE)), decreasing = TRUE)[1:40]
+
+# Define select FROM the SAME transformation you're plotting
+rld_mat <- assay(rld)
+select_rld <- order(rowMeans(rld_mat), decreasing = TRUE)[1:40]
+
+vsd_mat <- assay(vsd)
+select_vsd <- order(rowMeans(vsd_mat), decreasing = TRUE)[1:40]
+
+# CREATE annotation_col (MUST match your colData)
+annotation_col <- data.frame(
+  condition = colData(rld)$condition,  # Replace 'condition' with your actual column name
+  row.names = colnames(rld)
+)
+
+# Heatmap for rlog data
+pheatmap(assay(rld)[select, ],
+         scale = "row",
+         clustering_distance_rows = "correlation",
+         clustering_distance_cols = "correlation",
+         show_rownames = FALSE,
+         annotation_col = annotation_col,
+         main = "Top 40 expressed genes - rlog")
+
+# Heatmap for VST data
+
+pheatmap(assay(vsd)[select, ],
+         scale = "row",
+         clustering_distance_rows = "correlation",
+         clustering_distance_cols = "correlation",
+         show_rownames = FALSE,
+         annotation_col = annotation_col,
+         main = "Top 40 highly expressed genes - VST")
+
+         
+```
+
+
+##Task 3.13
+
+```{r}
+# Compute SDM from rlog transformed data
+sample_dist <- dist(t(assay(rld)))
+class(sample_dist)
+
+# Get SDM in matrix form
+sdm <- as.matrix(sample_dist)
+class(sdm)
+
+# Load library
+library("RColorBrewer")
+
+# Add row names for clear plot
+rownames(sdm) <- rld$Group
+colnames(sdm) <- NULL
+
+# Add colors
+colors <- colorRampPalette(rev(brewer.pal(9, "Reds")))(255)
+
+# Plot heatmap
+pheatmap(sdm,
+         clustering_distance_rows = sample_dist,
+         clustering_distance_cols = sample_dist,
+         col = colors)
+```
+
+##Task 3.14
+
+```{r}
+library(DESeq2)
+
+# Generate rlog-transformed data
+rld <- rlog(dds, blind = TRUE)
+
+# Perform PCA and extract variance percentages
+pcaData <- plotPCA(rld, intgroup = "condition", returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+percentVar
+
+#plot
+library(ggplot2)
+
+ggplot(pcaData, aes(PC1, PC2, color = condition)) +
+  geom_point(size = 3) +
+  xlab(paste0("PC1: ", percentVar[1], "% variance")) +
+  ylab(paste0("PC2: ", percentVar[2], "% variance")) +
+  theme_minimal()
+```
+
+
+
+##Task 3.15
+
+```{r}
+# Generate rlog-transformed data
+vsd <- vst(dds, blind = TRUE)
+
+# Perform PCA and extract variance percentages
+pcaData_vst <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
+percentVar_vst <- round(100 * attr(pcaData_vst, "percentVar"))
+percentVar_vst
+
+#save plot
+library(ggplot2)
+ggplot(pcaData_vst, aes(PC1, PC2, color = condition)) +
+  geom_point(size = 3) +
+  xlab(paste0("PC1: ", percentVar_vst[1], "% variance")) +
+  ylab(paste0("PC2: ", percentVar_vst[2], "% variance")) +
+  theme_minimal()
+```
+
+
